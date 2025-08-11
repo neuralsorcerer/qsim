@@ -24,10 +24,6 @@ QSim is a web application to design, simulate, and visualize quantum circuits. B
   - Export circuit diagram as PNG
   - Export amplitudes as CSV
   - Shareable URL generation
-- Performance safeguards and UX
-  - Prominent disclaimer about exponential state growth
-  - Soft‑limit confirmation before very large runs (state size >= 2^18 or depth > 128)
-  - Consistent button styles, color‑coded gate palette, keyboard/ARIA improvements
 
 ## Getting Started
 

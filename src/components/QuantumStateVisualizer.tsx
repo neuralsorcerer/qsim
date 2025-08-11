@@ -92,6 +92,10 @@ const QuantumStateVisualizer: React.FC<QuantumStateVisualizerProps> = ({
       light.position.set(3, 3, 3).normalize();
       scene.add(light);
 
+      const blochGroup = new THREE.Group();
+      blochGroup.rotation.x = -Math.PI / 2;
+      scene.add(blochGroup);
+
       const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
       const sphereMaterial = new THREE.MeshBasicMaterial({
         color: 0x87ceeb,
@@ -100,7 +104,96 @@ const QuantumStateVisualizer: React.FC<QuantumStateVisualizerProps> = ({
         transparent: true,
       });
       const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-      scene.add(sphere);
+      blochGroup.add(sphere);
+
+      const makeCircleLine = (
+        points: Array<[number, number, number]>,
+        color: number,
+        opacity = 0.35
+      ) => {
+        const positions = new Float32Array(points.length * 3);
+        for (let i = 0; i < points.length; i++) {
+          const [px, py, pz] = points[i];
+          positions[i * 3 + 0] = px;
+          positions[i * 3 + 1] = py;
+          positions[i * 3 + 2] = pz;
+        }
+        const geom = new THREE.BufferGeometry();
+        geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+        const mat = new THREE.LineBasicMaterial({
+          color,
+          transparent: true,
+          opacity,
+        });
+        const line = new THREE.LineLoop(geom, mat);
+        return { line, geom, mat };
+      };
+
+      const SEG = 128;
+      const circlePoints = (f: (t: number) => [number, number, number]) =>
+        Array.from({ length: SEG }, (_, i) => {
+          const t = (i / SEG) * Math.PI * 2;
+          return f(t);
+        });
+
+      const eq = makeCircleLine(
+        circlePoints((t) => [Math.cos(t), Math.sin(t), 0]),
+        0x8888ff
+      );
+      blochGroup.add(eq.line);
+
+      const merXZ = makeCircleLine(
+        circlePoints((t) => [Math.cos(t), 0, Math.sin(t)]),
+        0x88ff88,
+        0.3
+      );
+      blochGroup.add(merXZ.line);
+
+      const merYZ = makeCircleLine(
+        circlePoints((t) => [0, Math.cos(t), Math.sin(t)]),
+        0xff8888,
+        0.3
+      );
+      blochGroup.add(merYZ.line);
+
+      const makeLabelSprite = (text: string, color = "#ffffff") => {
+        const dpr = (window.devicePixelRatio || 1) as number;
+        const cw = 128 * dpr;
+        const ch = 64 * dpr;
+        const canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = ch;
+        const ctx = canvas.getContext("2d")!;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.font =
+          "24px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+        ctx.fillStyle = color;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, 64, 32);
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.anisotropy = 4;
+        tex.needsUpdate = true;
+        const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(0.35, 0.175, 1);
+        return {
+          sprite,
+          dispose: () => {
+            tex.dispose();
+            mat.dispose();
+          },
+        };
+      };
+
+      const xLbl = makeLabelSprite("X", "#ff5555");
+      xLbl.sprite.position.set(1.2, 0, 0);
+      const yLbl = makeLabelSprite("Y", "#55ff55");
+      yLbl.sprite.position.set(0, 1.2, 0);
+      const zLbl = makeLabelSprite("Z", "#5590ff");
+      zLbl.sprite.position.set(0, 0, 1.2);
+      blochGroup.add(xLbl.sprite, yLbl.sprite, zLbl.sprite);
 
       let color: number;
       const epsilon = 0.05;
@@ -132,10 +225,92 @@ const QuantumStateVisualizer: React.FC<QuantumStateVisualizerProps> = ({
         Math.max(0, Math.min(1, r)),
         color
       );
-      scene.add(arrowHelper);
+      blochGroup.add(arrowHelper);
+
+      const projLen = Math.max(0, Math.min(1, Math.sin(theta) * r));
+      const projDir = new THREE.Vector3(
+        Math.cos(phi),
+        Math.sin(phi),
+        0
+      ).normalize();
+      const projArrow = new THREE.ArrowHelper(
+        projDir,
+        new THREE.Vector3(0, 0, 0),
+        projLen,
+        0x3399ff
+      );
+      blochGroup.add(projArrow);
+
+      const thetaSteps = Math.max(
+        8,
+        Math.floor((64 * Math.abs(theta)) / Math.PI)
+      );
+      const thetaPts = new Float32Array((thetaSteps + 1) * 3);
+      const rArc = 1.02;
+      for (let i = 0; i <= thetaSteps; i++) {
+        const t = (i / thetaSteps) * theta;
+        const px = rArc * Math.sin(t) * Math.cos(phi);
+        const py = rArc * Math.sin(t) * Math.sin(phi);
+        const pz = rArc * Math.cos(t);
+        thetaPts[i * 3 + 0] = px;
+        thetaPts[i * 3 + 1] = py;
+        thetaPts[i * 3 + 2] = pz;
+      }
+      const thetaGeom = new THREE.BufferGeometry();
+      thetaGeom.setAttribute(
+        "position",
+        new THREE.BufferAttribute(thetaPts, 3)
+      );
+      const thetaMat = new THREE.LineBasicMaterial({
+        color: 0xffcc00,
+        transparent: true,
+        opacity: 0.7,
+      });
+      const thetaLine = new THREE.Line(thetaGeom, thetaMat);
+      blochGroup.add(thetaLine);
+      const thetaLbl = makeLabelSprite("θ", "#ffcc00");
+      {
+        const endIdx = thetaSteps * 3;
+        const lx = thetaPts[endIdx + 0] * 1.06;
+        const ly = thetaPts[endIdx + 1] * 1.06;
+        const lz = thetaPts[endIdx + 2] * 1.06;
+        thetaLbl.sprite.position.set(lx, ly, lz);
+        thetaLbl.sprite.scale.set(0.25, 0.125, 1);
+        blochGroup.add(thetaLbl.sprite);
+      }
+
+      const phiSteps = Math.max(8, Math.floor((64 * Math.abs(phi)) / Math.PI));
+      const phiPts = new Float32Array((phiSteps + 1) * 3);
+      for (let i = 0; i <= phiSteps; i++) {
+        const a = (i / Math.max(1, phiSteps)) * phi;
+        const px = rArc * Math.cos(a);
+        const py = rArc * Math.sin(a);
+        phiPts[i * 3 + 0] = px;
+        phiPts[i * 3 + 1] = py;
+        phiPts[i * 3 + 2] = 0;
+      }
+      const phiGeom = new THREE.BufferGeometry();
+      phiGeom.setAttribute("position", new THREE.BufferAttribute(phiPts, 3));
+      const phiMat = new THREE.LineBasicMaterial({
+        color: 0x66ccff,
+        transparent: true,
+        opacity: 0.7,
+      });
+      const phiLine = new THREE.Line(phiGeom, phiMat);
+      blochGroup.add(phiLine);
+      const phiLbl = makeLabelSprite("φ", "#66ccff");
+      {
+        const endIdx = phiSteps * 3;
+        const lx = phiPts[endIdx + 0] * 1.06;
+        const ly = phiPts[endIdx + 1] * 1.06;
+        const lz = 0;
+        phiLbl.sprite.position.set(lx, ly, lz);
+        phiLbl.sprite.scale.set(0.25, 0.125, 1);
+        blochGroup.add(phiLbl.sprite);
+      }
 
       const axesHelper = new THREE.AxesHelper(1.5);
-      scene.add(axesHelper);
+      blochGroup.add(axesHelper);
 
       camera.position.set(0, 0, 3);
       camera.lookAt(0, 0, 0);
@@ -174,6 +349,21 @@ const QuantumStateVisualizer: React.FC<QuantumStateVisualizerProps> = ({
         } else {
           sphereMaterial.dispose();
         }
+        eq.geom.dispose();
+        (eq.mat as THREE.Material).dispose?.();
+        merXZ.geom.dispose();
+        (merXZ.mat as THREE.Material).dispose?.();
+        merYZ.geom.dispose();
+        (merYZ.mat as THREE.Material).dispose?.();
+        xLbl.dispose();
+        yLbl.dispose();
+        zLbl.dispose();
+        thetaGeom.dispose();
+        (thetaMat as THREE.Material).dispose?.();
+        phiGeom.dispose();
+        (phiMat as THREE.Material).dispose?.();
+        thetaLbl.dispose();
+        phiLbl.dispose();
         renderer.dispose();
         if (ro) {
           ro.disconnect();
