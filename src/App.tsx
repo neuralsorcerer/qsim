@@ -26,7 +26,6 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/circuit-builder" element={<CircuitBuilder />} />
-              {/* Fallback to home for any unknown route */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

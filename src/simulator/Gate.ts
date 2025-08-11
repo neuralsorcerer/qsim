@@ -73,12 +73,6 @@ export class Gate {
       ],
       [
         new ComplexNumber(0),
-        new ComplexNumber(1),
-        new ComplexNumber(0),
-        new ComplexNumber(0),
-      ],
-      [
-        new ComplexNumber(0),
         new ComplexNumber(0),
         new ComplexNumber(0),
         new ComplexNumber(1),
@@ -87,6 +81,12 @@ export class Gate {
         new ComplexNumber(0),
         new ComplexNumber(0),
         new ComplexNumber(1),
+        new ComplexNumber(0),
+      ],
+      [
+        new ComplexNumber(0),
+        new ComplexNumber(1),
+        new ComplexNumber(0),
         new ComplexNumber(0),
       ],
     ]);
@@ -125,14 +125,16 @@ export class Gate {
     const size = 8;
     const matrixData: ComplexNumber[][] = [];
     for (let i = 0; i < size; i++) {
-      const row = Array(size).fill(new ComplexNumber(0));
-      row[i] = new ComplexNumber(1);
+      const row: ComplexNumber[] = [];
+      for (let j = 0; j < size; j++) {
+        row.push(new ComplexNumber(i === j ? 1 : 0));
+      }
       matrixData.push(row);
     }
-    matrixData[6][6] = new ComplexNumber(0);
-    matrixData[6][7] = new ComplexNumber(1);
-    matrixData[7][6] = new ComplexNumber(1);
+    matrixData[3][3] = new ComplexNumber(0);
     matrixData[7][7] = new ComplexNumber(0);
+    matrixData[3][7] = new ComplexNumber(1);
+    matrixData[7][3] = new ComplexNumber(1);
     return new Gate(matrixData);
   }
 
@@ -169,9 +171,15 @@ export class Gate {
     const size = 1 << numQubits;
     const matrixData: ComplexNumber[][] = [];
     for (let i = 0; i < size; i++) {
-      const value = i === targetState ? -1 : 1;
-      const row = Array(size).fill(new ComplexNumber(0));
-      row[i] = new ComplexNumber(value);
+      const row: ComplexNumber[] = [];
+      for (let j = 0; j < size; j++) {
+        const isDiag = i === j;
+        if (isDiag) {
+          row.push(new ComplexNumber(i === targetState ? -1 : 1));
+        } else {
+          row.push(new ComplexNumber(0));
+        }
+      }
       matrixData.push(row);
     }
     return new Gate(matrixData);

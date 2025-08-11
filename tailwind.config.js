@@ -5,6 +5,8 @@
 import { withUt } from "uploadthing/tw";
 
 const config = {
+  // Enable class-based dark mode so the theme can be toggled at runtime
+  darkMode: "class",
   content: ["./src/**/*.{js,jsx,ts,tsx}", "./public/index.html"],
   prefix: "",
   theme: {

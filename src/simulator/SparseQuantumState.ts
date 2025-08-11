@@ -5,17 +5,35 @@
 import { ComplexNumber } from "./Complex";
 import { Gate } from "./Gate";
 import { DEBUG } from "../config";
+import { NORMALIZE_EACH_STEP } from "../config";
 
 export class SparseQuantumState {
   numQubits: number;
   amplitudes: Map<number, ComplexNumber>;
+  normalizeEachStep: boolean;
 
-  constructor(numQubits: number) {
+  constructor(
+    numQubits: number,
+    initialBasisState: number = 0,
+    normalizeEachStep?: boolean
+  ) {
     this.numQubits = numQubits;
     this.amplitudes = new Map();
-    this.amplitudes.set(0, new ComplexNumber(1, 0));
+    this.normalizeEachStep =
+      normalizeEachStep === undefined ? NORMALIZE_EACH_STEP : normalizeEachStep;
+    const maxIndex = (1 << numQubits) - 1;
+    if (initialBasisState < 0 || initialBasisState > maxIndex) {
+      throw new Error(
+        `Initial basis state out of range. Expected 0..${maxIndex}, received ${initialBasisState}.`
+      );
+    }
+    this.amplitudes.set(initialBasisState, new ComplexNumber(1, 0));
     if (DEBUG) {
-      console.log(`Initialized quantum state with ${numQubits} qubits.`);
+      console.log(
+        `Initialized quantum state with ${numQubits} qubits at |${initialBasisState
+          .toString(2)
+          .padStart(numQubits, "0")}⟩.`
+      );
     }
   }
 
@@ -72,7 +90,9 @@ export class SparseQuantumState {
     }
 
     this.amplitudes = newAmplitudes;
-    this.normalize();
+    if (this.normalizeEachStep) {
+      this.normalize();
+    }
 
     if (DEBUG) {
       console.log(`State after applying ${gate.constructor.name}:`);

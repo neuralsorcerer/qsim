@@ -6,22 +6,22 @@ import React from "react";
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-white/30 backdrop-blur-lg py-8 shadow-lg">
+    <footer className="bg-white/40 dark:bg-black/30 backdrop-blur-lg py-8 shadow-lg border-t">
       <div className="container mx-auto px-6 mb-4 text-center">
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
           For the best experience, please view this site on a desktop browser.
         </p>
       </div>
-      <div className="container mx-auto px-6 border-gray-300 text-center">
-        <p className="text-gray-800">
+      <div className="container mx-auto px-6 text-center">
+        <p className="text-foreground">
           &copy; {new Date().getFullYear()} Quantum Simulator. All rights
           reserved.
         </p>
-        <p className="text-gray-800">
+        <p className="text-foreground">
           Built with ❤️ by{" "}
           <a
             href="https://soumyadipsarkar.com"
-            className="text-blue-500 hover:text-blue-300"
+            className="text-primary hover:opacity-80"
           >
             Soumyadip Sarkar
           </a>

@@ -7,14 +7,30 @@ import { ContactMe } from "./ContactMe";
 import { Link } from "react-router-dom";
 import { Button } from "./Button";
 import { FaArrowRight } from "react-icons/fa";
-import HeroImage from "../assets/hero.png";
+import HeroImageLight from "../assets/hero.png";
+import HeroImageDark from "../assets/hero-dark.png";
 import QuantumMaths from "../assets/quantum-maths.png";
 import AnimatedGridPattern from "./magicui/AnimatedGrid";
 import { cn } from "../lib/utils";
 import { motion } from "framer-motion";
 import { HowItWorks } from "./HowItWorks";
+import { useEffect, useState } from "react";
 
 export function HomePage() {
+  const [isDark, setIsDark] = useState<boolean>(() =>
+    document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setIsDark(root.classList.contains("dark"));
+    update();
+    const mo = new MutationObserver(update);
+    mo.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+
+  const heroSrc = isDark ? HeroImageDark : HeroImageLight;
+
   return (
     <>
       <section className="relative flex items-center justify-center">
@@ -34,14 +50,17 @@ export function HomePage() {
             </h1>
 
             <p className="max-w-xl mx-auto mt-4 text-base font-light lg:text-lg text-muted-foreground tracking-tighter">
-              Easily design, simulate, and visualize quantum circuits with
-              intuitive tools that allow you to experiment with quantum gates
-              and qubit states effortlessly.
+              Design, simulate, and visualize quantum circuits with intuitive
+              tools. Experiment with gates, superposition, and entanglement.
             </p>
             <div className="flex items-center gap-x-5 w-full justify-center mt-5 ">
-              <Link to="https://tutorials.quantumsimulator.in/">
+              <a
+                href="https://tutorials.quantumsimulator.in/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <Button variant="secondary">Tutorials</Button>
-              </Link>
+              </a>
               <Link to="/circuit-builder">
                 <Button variant="default">
                   Get Started <FaArrowRight className="ml-2" />
@@ -124,7 +143,7 @@ export function HomePage() {
             </svg>
 
             <img
-              src={HeroImage}
+              src={heroSrc}
               alt="Hero image"
               className="relative object-cover w-full border rounded-lg shadow-2xl lg:rounded-2xl"
             />
@@ -147,16 +166,16 @@ export function HomePage() {
               <h2 className="text-3xl font-bold mb-4">
                 Experience Quantum Computing Like Never Before
               </h2>
-              <p className="text-gray-600 mb-6">
+              <p className="text-muted-foreground mb-6">
                 QSim brings the power of quantum computing to your fingertips.
                 Whether you're a researcher, student, or enthusiast, our
                 platform provides the tools you need to explore and experiment
                 with quantum circuits.
               </p>
               <Link to="/circuit-builder">
-                <button className="bg-blue-600 text-white font-bold py-3 px-8 rounded-full hover:bg-blue-700 transition duration-300 flex items-center">
+                <Button>
                   Get Started <FaArrowRight className="ml-2" />
-                </button>
+                </Button>
               </Link>
             </div>
           </div>

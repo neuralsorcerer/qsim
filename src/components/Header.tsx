@@ -2,64 +2,97 @@
  * Copyright Soumyadip Sarkar 2025. All Rights Reserved.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { Sun, Moon } from "lucide-react";
+import { initTheme, toggleTheme, type Theme } from "../lib/theme";
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>("light");
+
+  useEffect(() => {
+    setTheme(initTheme());
+  }, []);
 
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
   return (
-    <nav className="bg-white/30 backdrop-blur-lg p-4 shadow-lg rounded-lg">
+    <nav className="bg-white/50 dark:bg-black/30 backdrop-blur-lg p-4 shadow-lg rounded-lg border border-border">
       <div className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-blue-500 text-2xl font-bold">
+        <Link to="/" className="text-primary text-2xl font-bold">
           Quantum Simulator
         </Link>
 
-        <div className="hidden md:flex space-x-4">
+        <div className="hidden md:flex items-center space-x-4">
           <Link
             to="/circuit-builder"
-            className="text-black hover:text-blue-500"
+            className="text-foreground/90 hover:text-primary transition-colors"
           >
             Circuit Builder
           </Link>
-          <Link
-            to="https://tutorials.quantumsimulator.in/"
-            className="text-black hover:text-blue-500"
+          <a
+            href="https://tutorials.quantumsimulator.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground/90 hover:text-primary transition-colors"
           >
             Tutorials
-          </Link>
+          </a>
+          <button
+            aria-label="Toggle theme"
+            className="inline-flex items-center justify-center rounded-md border px-3 py-2 text-sm bg-background hover:bg-accent transition-colors"
+            onClick={() => setTheme(toggleTheme())}
+            title={theme === "dark" ? "Switch to light" : "Switch to dark"}
+          >
+            {theme === "dark" ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
-        <button onClick={toggleMenu} className="md:hidden text-black text-2xl">
+        <button
+          onClick={toggleMenu}
+          className="md:hidden text-foreground text-2xl"
+        >
           {isMenuOpen ? "✖️" : "☰"}
         </button>
       </div>
 
       {isMenuOpen && (
-        <div className="md:hidden bg-white/20 backdrop-blur-lg text-white py-4 px-6 mt-2 rounded-lg shadow-lg">
+        <div className="md:hidden bg-white/60 dark:bg-black/40 backdrop-blur-lg text-white py-4 px-6 mt-2 rounded-lg shadow-lg border">
           <Link
             to="/"
-            className="block py-2 text-black hover:text-blue-500"
+            className="block py-2 text-foreground hover:text-primary"
             onClick={() => setIsMenuOpen(false)}
           >
             Home
           </Link>
           <Link
             to="/circuit-builder"
-            className="block py-2 text-black hover:text-blue-500"
+            className="block py-2 text-foreground hover:text-primary"
             onClick={() => setIsMenuOpen(false)}
           >
             Circuit Builder
           </Link>
-          <Link
-            to="https://tutorials.quantumsimulator.in/"
-            className="block py-2 text-black hover:text-blue-500"
+          <a
+            href="https://tutorials.quantumsimulator.in/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block py-2 text-foreground hover:text-primary"
             onClick={() => setIsMenuOpen(false)}
           >
             Tutorials
-          </Link>
+          </a>
+          <button
+            aria-label="Toggle theme"
+            className="mt-3 inline-flex items-center justify-center rounded-md border px-3 py-2 text-sm bg-background hover:bg-accent transition-colors w-full"
+            onClick={() => setTheme(toggleTheme())}
+          >
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
         </div>
       )}
     </nav>

@@ -15,9 +15,39 @@ interface GateOperation {
 export class Circuit {
   numQubits: number;
   operations: GateOperation[] = [];
+  initialBasisState: number;
 
-  constructor(numQubits: number) {
+  constructor(numQubits: number, initialBasisState: number = 0) {
     this.numQubits = numQubits;
+    this.initialBasisState = initialBasisState;
+  }
+
+  private static gateArity(gate: Gate): number {
+    const size = gate.size;
+    const k = Math.log2(size);
+    if (!Number.isFinite(k) || Math.round(k) !== k) {
+      throw new Error(`Invalid gate size: ${size}. Expected power of 2.`);
+    }
+    return k;
+  }
+
+  private static validateArity(gate: Gate, qubits: number[]): void {
+    const arity = Circuit.gateArity(gate);
+    if (qubits.length !== arity) {
+      throw new Error(
+        `Gate expects ${arity} qubit(s), received ${qubits.length}.`
+      );
+    }
+    if (arity > 1) {
+      const uniq = new Set(qubits);
+      if (uniq.size !== qubits.length) {
+        throw new Error(
+          `Multi-qubit gate requires distinct target qubits; received ${qubits.join(
+            ","
+          )}.`
+        );
+      }
+    }
   }
 
   addGate(gate: Gate, qubits: number[]): void {
@@ -28,6 +58,7 @@ export class Circuit {
         }, Provided: ${Math.max(...qubits)})`
       );
     }
+    Circuit.validateArity(gate, qubits);
 
     if (DEBUG) {
       console.log(`Adding gate: ${gate.constructor.name} to qubits: ${qubits}`);
@@ -48,6 +79,19 @@ export class Circuit {
         }, Provided: ${Math.max(...qubits)})`
       );
     }
+    if (condition.qubit < 0 || condition.qubit >= this.numQubits) {
+      throw new Error(
+        `Condition qubit out of range (Expected 0..${
+          this.numQubits - 1
+        }, Received: ${condition.qubit})`
+      );
+    }
+    if (qubits.includes(condition.qubit)) {
+      throw new Error(
+        `Conditional qubit must be distinct from target qubits; received overlap at q${condition.qubit}.`
+      );
+    }
+    Circuit.validateArity(gate, qubits);
 
     if (DEBUG) {
       console.log(
@@ -58,7 +102,10 @@ export class Circuit {
   }
 
   run(): SparseQuantumState {
-    const state = new SparseQuantumState(this.numQubits);
+    const state = new SparseQuantumState(
+      this.numQubits,
+      this.initialBasisState
+    );
     if (DEBUG) {
       console.log(
         `Running the circuit with ${this.operations.length} operations...`
