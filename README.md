@@ -17,8 +17,6 @@ QSim is a web application to design, simulate, and visualize quantum circuits. B
 - Persistence and portability
   - Save/Load from browser storage
   - Import/Export circuits as JSON
-- SPA routing with a wildcard fallback
-- Modern, responsive UI
 
 ## Getting Started
 
