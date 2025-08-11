@@ -2,59 +2,29 @@
  * Copyright Soumyadip Sarkar 2025. All Rights Reserved.
  */
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { Circuit } from "../simulator/Circuit";
-import { Gate } from "../simulator/Gate";
 import { ComplexNumber } from "../simulator/Complex";
-import QuantumStateVisualizer from "./QuantumStateVisualizer";
 import { Button } from "./Button";
 import { DEBUG } from "../config";
 import { toPng } from "dom-to-image-more";
 
-const gateMap: { [key: string]: (...args: number[]) => Gate } = {
-  Hadamard: Gate.Hadamard,
-  PauliX: Gate.PauliX,
-  PauliY: Gate.PauliY,
-  PauliZ: Gate.PauliZ,
-  RX: Gate.RX,
-  RY: Gate.RY,
-  RZ: Gate.RZ,
-  CNOT: Gate.CNOT,
-  Swap: Gate.Swap,
-  Toffoli: Gate.Toffoli,
-  ControlledPhaseShift: Gate.ControlledPhaseShift,
-  Oracle: Gate.Oracle,
-  Diffusion: Gate.Diffusion,
-};
-
-type HistoryOp = {
-  gateName: string;
-  qubits: number[];
-  params?: number[];
-  condition?: { qubit: number; value: number };
-};
-
-const opToLabel = (op: HistoryOp) => {
-  const params = op.params ?? [];
-  const base = `${op.gateName}${params.length ? `(${params.join(",")})` : ""}`;
-  const target =
-    op.qubits.length === 1
-      ? ` on Qubit: ${op.qubits[0]}`
-      : ` on Qubits: ${op.qubits.join(", ")}`;
-  const cond = op.condition
-    ? ` [if q${op.condition.qubit}=${op.condition.value}]`
-    : "";
-  return base + target + cond;
-};
-
-const errorMessageFrom = (e: unknown): string => {
-  if (e instanceof Error) return e.message;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    return String(e);
-  }
-};
+import { gateMap } from "./circuitbuilder/gateMap";
+import type { HistoryOp } from "./circuitbuilder/types";
+import { errorMessageFrom } from "./circuitbuilder/types";
+import GatePalette from "./circuitbuilder/GatePalette";
+import InitialStateControls from "./circuitbuilder/InitialStateControls";
+import Presets from "./circuitbuilder/Presets";
+import DiagramPanel from "./circuitbuilder/DiagramPanel";
+import RunPanel from "./circuitbuilder/RunPanel";
+import PersistencePanel from "./circuitbuilder/PersistencePanel";
+import { Helmet } from "react-helmet-async";
 
 const CircuitBuilder: React.FC = () => {
   const [numQubits, setNumQubits] = useState<number>(2);
@@ -63,7 +33,7 @@ const CircuitBuilder: React.FC = () => {
   const [circuit, setCircuit] = useState<Circuit>(new Circuit(2, 0));
 
   const [selectedGate, setSelectedGate] = useState<string>("");
-  const [qubitsInput, setQubitsInput] = useState<string>(""); // comma-separated
+  const [qubitsInput, setQubitsInput] = useState<string>("");
   const [angle, setAngle] = useState<number>(Math.PI / 2);
   const [oracleTargetState, setOracleTargetState] = useState<number>(0);
 
@@ -97,7 +67,14 @@ const CircuitBuilder: React.FC = () => {
     full.length <= maxVisible ? full : `${full.slice(0, 8)}…${full.slice(-8)}`;
 
   const [page, setPage] = useState<number>(0);
-  const [pageSize, setPageSize] = useState<number>(16);
+  const [pageSize, setPageSize] = useState<number>(() => {
+    if (typeof window !== "undefined") {
+      const w = window.innerWidth;
+      if (w < 480) return 8;
+      if (w < 768) return 12;
+    }
+    return 16;
+  });
 
   const totalPages = useMemo(
     () => Math.max(1, Math.ceil(Math.max(gateHistory.length, 1) / pageSize)),
@@ -112,7 +89,7 @@ const CircuitBuilder: React.FC = () => {
   const canRemoveLast = gateHistory.length > 0;
   const canResetCircuit = gateHistory.length > 0;
 
-  const parseQubits = (): number[] => {
+  const parseQubits = useCallback((): number[] => {
     const trimmed = qubitsInput.trim();
     if (!trimmed) return [];
     const seen = new Set<number>();
@@ -126,7 +103,7 @@ const CircuitBuilder: React.FC = () => {
       }
     }
     return out;
-  };
+  }, [qubitsInput]);
 
   const canAddGate = useMemo(() => {
     if (!selectedGate) return false;
@@ -170,42 +147,44 @@ const CircuitBuilder: React.FC = () => {
     return true;
   }, [
     selectedGate,
-    qubitsInput,
+    parseQubits,
     numQubits,
     useCondition,
     conditionQubit,
     oracleTargetState,
   ]);
 
-  const applyHistoryToCircuit = (c: Circuit, history: HistoryOp[]) => {
-    history.forEach((op) => {
-      const gateFactory = gateMap[op.gateName];
-      if (!gateFactory) return;
-      const gate = gateFactory(...(op.params ?? []));
-      if (op.condition) c.addConditionalGate(gate, op.qubits, op.condition);
-      else c.addGate(gate, op.qubits);
-    });
-  };
+  const applyHistoryToCircuit = useCallback(
+    (c: Circuit, history: HistoryOp[]) => {
+      history.forEach((op) => {
+        const gateFactory = gateMap[op.gateName];
+        if (!gateFactory) return;
+        const gate = gateFactory(...(op.params ?? []));
+        if (op.condition) c.addConditionalGate(gate, op.qubits, op.condition);
+        else c.addGate(gate, op.qubits);
+      });
+    },
+    []
+  );
 
-  const rebuildFromHistory = (
-    qCount: number,
-    initState: number,
-    operations: HistoryOp[]
-  ) => {
-    const newCircuit = new Circuit(qCount, initState);
-    applyHistoryToCircuit(newCircuit, operations);
-    setNumQubits(qCount);
-    setInputValue(String(qCount));
-    setInitialBasisState(initState);
-    setCircuit(newCircuit);
-    setGateHistory(operations);
-    setResults(null);
-    setCounts(null);
-    setQubitStates([]);
-    setAmplitudes(null);
-    setPage(0);
-    setErrorMessage("");
-  };
+  const rebuildFromHistory = useCallback(
+    (qCount: number, initState: number, operations: HistoryOp[]) => {
+      const newCircuit = new Circuit(qCount, initState);
+      applyHistoryToCircuit(newCircuit, operations);
+      setNumQubits(qCount);
+      setInputValue(String(qCount));
+      setInitialBasisState(initState);
+      setCircuit(newCircuit);
+      setGateHistory(operations);
+      setResults(null);
+      setCounts(null);
+      setQubitStates([]);
+      setAmplitudes(null);
+      setPage(0);
+      setErrorMessage("");
+    },
+    [applyHistoryToCircuit]
+  );
 
   const handleAddGate = () => {
     try {
@@ -542,7 +521,7 @@ const CircuitBuilder: React.FC = () => {
     } catch {
       setErrorMessage("Failed to load circuit from URL.");
     }
-  }, []);
+  }, [rebuildFromHistory]);
 
   const handleExportPNG = async () => {
     if (!circuitDiagramRef.current) return;
@@ -631,1006 +610,362 @@ const CircuitBuilder: React.FC = () => {
     }
   };
 
-  const renderCircuitDiagram = () => {
-    const columns = visibleHistory.length;
-
-    const isBetween = (op: HistoryOp, q: number) => {
-      if (op.qubits.length <= 1) return false;
-      const top = Math.min(...op.qubits);
-      const bot = Math.max(...op.qubits);
-      return q > top && q < bot;
-    };
-
-    const gateToken = (op: HistoryOp): string => {
-      const p = op.params ?? [];
-      switch (op.gateName) {
-        case "RX":
-        case "RY":
-        case "RZ":
-          return `${op.gateName}(${(p[0] ?? 0).toFixed(2)})`;
-        case "ControlledPhaseShift":
-          return `CP(${(p[0] ?? 0).toFixed(2)})`;
-        case "Oracle":
-          return `Oracle${p.length ? `(${p.join(",")})` : ""}`;
-        case "Diffusion":
-          return `Diff${p.length ? `(${p.join(",")})` : ""}`;
-        default:
-          return op.gateName;
-      }
-    };
-
-    const colHighlight = (colIndex: number) =>
-      hoveredCol === colIndex ? " bg-amber-50" : "";
-
-    return (
-      <div className="overflow-x-auto" ref={circuitDiagramRef}>
-        <table className="table-auto w-full border-collapse">
-          <caption className="sr-only">
-            Quantum circuit diagram showing qubits as rows and gates as columns
-          </caption>
-          <thead>
-            <tr>
-              <th className="px-4 py-2 border bg-muted text-center text-foreground transition-colors">
-                Qubit
-              </th>
-              {columns > 0 &&
-                Array.from({ length: columns }).map((_, i) => (
-                  <th
-                    key={i}
-                    className={`px-4 py-2 border bg-muted text-center transition-colors${colHighlight(
-                      i
-                    )}`}
-                    onMouseEnter={() => setHoveredCol(i)}
-                    onMouseLeave={() => setHoveredCol(null)}
-                    title={`Gate #${colStart + i + 1}`}
-                  >
-                    {colStart + i + 1}
-                  </th>
-                ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: numQubits }).map((_, q) => (
-              <tr key={`row-${q}`}>
-                <td className="px-4 py-2 border text-center font-medium text-foreground">
-                  q{q}
-                </td>
-                {columns > 0 &&
-                  Array.from({ length: columns }).map((_, colIndex) => {
-                    const op = visibleHistory[colIndex];
-                    if (!op)
-                      return (
-                        <td
-                          key={`c-${q}-${colIndex}`}
-                          className={`px-2 py-1 border text-center${colHighlight(
-                            colIndex
-                          )}`}
-                        />
-                      );
-
-                    if (isBetween(op, q)) {
-                      return (
-                        <td
-                          key={`c-${q}-${colIndex}`}
-                          className={`px-2 py-1 border align-middle${colHighlight(
-                            colIndex
-                          )}`}
-                        >
-                          <div
-                            className="flex items-stretch justify-center relative"
-                            style={{ minHeight: 28 }}
-                          >
-                            <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                          </div>
-                        </td>
-                      );
-                    }
-
-                    const includes = op.qubits.includes(q);
-                    if (!includes)
-                      return (
-                        <td
-                          key={`c-${q}-${colIndex}`}
-                          className={`px-2 py-1 border text-center${colHighlight(
-                            colIndex
-                          )}`}
-                        />
-                      );
-
-                    const token = gateToken(op);
-                    const commonCellProps: React.TdHTMLAttributes<HTMLTableCellElement> =
-                      {
-                        title: opToLabel(op),
-                      };
-
-                    if (op.gateName === "CNOT" && op.qubits.length === 2) {
-                      const [control, target] = op.qubits;
-                      if (q === control)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-lg leading-none">•</span>
-                            </div>
-                          </td>
-                        );
-                      if (q === target)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-xs font-semibold">X</span>
-                            </div>
-                          </td>
-                        );
-                    }
-
-                    if (op.gateName === "Swap" && op.qubits.length === 2) {
-                      return (
-                        <td
-                          key={`c-${q}-${colIndex}`}
-                          className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                            colIndex
-                          )}`}
-                          {...commonCellProps}
-                        >
-                          <div
-                            className="relative flex items-center justify-center"
-                            style={{ minHeight: 28 }}
-                          >
-                            <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                            <span className="text-sm">⟷</span>
-                          </div>
-                        </td>
-                      );
-                    }
-
-                    if (op.gateName === "Toffoli" && op.qubits.length === 3) {
-                      const [c1, c2, t] = op.qubits;
-                      if (q === c1 || q === c2)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-lg leading-none">•</span>
-                            </div>
-                          </td>
-                        );
-                      if (q === t)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-xs font-semibold">X</span>
-                            </div>
-                          </td>
-                        );
-                    }
-
-                    if (
-                      op.gateName === "ControlledPhaseShift" &&
-                      op.qubits.length === 2
-                    ) {
-                      const [control, target] = op.qubits;
-                      if (q === control)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-lg leading-none">•</span>
-                            </div>
-                          </td>
-                        );
-                      if (q === target)
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center gap-1"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-xs">θ</span>
-                              {op.params?.length ? (
-                                <span className="text-[10px] text-gray-700">
-                                  ({op.params[0]?.toFixed(2)})
-                                </span>
-                              ) : null}
-                            </div>
-                          </td>
-                        );
-                    }
-
-                    if (
-                      (op.gateName === "Oracle" ||
-                        op.gateName === "Diffusion") &&
-                      op.qubits.length > 1
-                    ) {
-                      const top = Math.min(...op.qubits);
-                      if (q === top) {
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/20 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                              <span className="text-xs font-semibold">
-                                {gateToken(op)}
-                              </span>
-                              {op.condition ? (
-                                <span className="absolute -top-1 -right-1 bg-secondary text-secondary-foreground text-[10px] px-1 py-0.5 rounded border">
-                                  if q{op.condition.qubit}={op.condition.value}
-                                </span>
-                              ) : null}
-                            </div>
-                          </td>
-                        );
-                      }
-                      if (op.qubits.includes(q)) {
-                        return (
-                          <td
-                            key={`c-${q}-${colIndex}`}
-                            className={`px-2 py-1 text-center border bg-accent/10 relative${colHighlight(
-                              colIndex
-                            )}`}
-                            {...commonCellProps}
-                          >
-                            <div
-                              className="relative flex items-center justify-center"
-                              style={{ minHeight: 28 }}
-                            >
-                              <div className="absolute left-1/2 -translate-x-1/2 w-0.5 bg-primary/40 top-0 bottom-0" />
-                            </div>
-                          </td>
-                        );
-                      }
-                    }
-
-                    if (op.qubits.length === 1 && op.qubits[0] === q) {
-                      return (
-                        <td
-                          key={`c-${q}-${colIndex}`}
-                          className={`px-2 py-1 text-center border bg-primary/10 text-foreground relative${colHighlight(
-                            colIndex
-                          )}`}
-                          {...commonCellProps}
-                        >
-                          <div
-                            className="relative flex items-center justify-center"
-                            style={{ minHeight: 28 }}
-                          >
-                            <span className="text-xs font-semibold">
-                              {token}
-                            </span>
-                            {op.condition ? (
-                              <span className="absolute -top-1 -right-1 bg-secondary text-secondary-foreground text-[10px] px-1 py-0.5 rounded border">
-                                if q{op.condition.qubit}={op.condition.value}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-                      );
-                    }
-
-                    return (
-                      <td
-                        key={`c-${q}-${colIndex}`}
-                        className={`px-2 py-1 border text-center${colHighlight(
-                          colIndex
-                        )}`}
-                      />
-                    );
-                  })}
-              </tr>
-            ))}
-            {columns > 0 && (
-              <tr>
-                <td className="px-4 py-2 border text-right text-xs text-muted-foreground">
-                  Remove
-                </td>
-                {Array.from({ length: columns }).map((_, colIndex) => (
-                  <td
-                    key={`rm-${colIndex}`}
-                    className={`px-2 py-1 border text-center transition-colors${colHighlight(
-                      colIndex
-                    )}`}
-                  >
-                    <button
-                      className="px-2 py-0.5 text-xs rounded border border-destructive/30 bg-destructive/10 hover:bg-destructive/20 text-destructive"
-                      onClick={() => handleRemoveGateAt(colStart + colIndex)}
-                      title={`Remove gate #${colStart + colIndex + 1}`}
-                      aria-label={`Remove gate #${colStart + colIndex + 1}${
-                        visibleHistory[colIndex]
-                          ? `: ${opToLabel(visibleHistory[colIndex])}`
-                          : ""
-                      }`}
-                      onMouseEnter={() => setHoveredCol(colIndex)}
-                      onMouseLeave={() => setHoveredCol(null)}
-                    >
-                      ✕
-                    </button>
-                  </td>
-                ))}
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {columns === 0 && (
-          <div className="text-sm text-muted-foreground p-3">
-            No gates added yet. Select a gate and qubit(s), then click "Add
-            Gate".
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const quickSelect = (label: string, value: string, title?: string) => {
-    const qs = parseQubits();
-    const isSingle = [
-      "Hadamard",
-      "PauliX",
-      "PauliY",
-      "PauliZ",
-      "RX",
-      "RY",
-      "RZ",
-    ].includes(value);
-    const isTwo = ["CNOT", "Swap", "ControlledPhaseShift"].includes(value);
-    const isThree = value === "Toffoli";
-    const isOracle = value === "Oracle";
-    const isDiff = value === "Diffusion";
-
-    const canUse = isDiff
-      ? true
-      : isSingle
-      ? qs.length === 1
-      : isTwo
-      ? qs.length === 2
-      : isThree
-      ? qs.length === 3
-      : isOracle
-      ? qs.length >= 1
-      : true;
-
-    const colorClass = isDiff
-      ? "border-teal-300 text-teal-800 bg-teal-50 hover:bg-teal-100"
-      : isOracle
-      ? "border-rose-300 text-rose-800 bg-rose-50 hover:bg-rose-100"
-      : ["RX", "RY", "RZ"].includes(value)
-      ? "border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100"
-      : isTwo
-      ? "border-violet-300 text-violet-800 bg-violet-50 hover:bg-violet-100"
-      : isThree
-      ? "border-fuchsia-300 text-fuchsia-800 bg-fuchsia-50 hover:bg-fuchsia-100"
-      : "border-sky-300 text-sky-800 bg-sky-50 hover:bg-sky-100";
-
-    return (
-      <button
-        key={value}
-        className={`px-2 py-1 text-xs rounded border shadow-sm transition-colors ${colorClass} ${
-          selectedGate === value ? "ring-1 ring-primary" : ""
-        } ${!canUse ? "opacity-50 cursor-not-allowed" : ""}`}
-        title={title || String(value)}
-        aria-label={`Select gate ${title || String(value)}`}
-        aria-pressed={selectedGate === value}
-        disabled={!canUse}
-        onClick={() => {
-          if (!canUse) return;
-          setSelectedGate(String(value));
-        }}
-        type="button"
-      >
-        {label}
-      </button>
-    );
-  };
-
   return (
-    <div className="max-w-7xl mx-auto p-8 bg-card rounded-lg shadow-lg mt-10 space-y-8 border">
-      <h1 className="text-4xl font-extrabold text-center mb-8 text-foreground">
-        Quantum Circuit Builder{" "}
-        <span className="text-primary">(Experimental)</span>
-      </h1>
+    <>
+      <Helmet>
+        <title>Quantum Circuit Builder — QSim</title>
+        <meta
+          name="description"
+          content="Build quantum circuits with gates like Hadamard, CNOT, RX/RY/RZ, Toffoli, Oracle, and Diffusion. Run simulations, export results, and share your designs."
+        />
+        <link
+          rel="canonical"
+          href="https://quantumsimulator.in/circuit-builder"
+        />
+        <meta property="og:title" content="Quantum Circuit Builder — QSim" />
+        <meta
+          property="og:description"
+          content="Build and simulate quantum circuits in your browser with QSim."
+        />
+        <meta
+          property="og:image"
+          content="https://quantumsimulator.in/logo.png"
+        />
+        <meta
+          property="og:url"
+          content="https://quantumsimulator.in/circuit-builder"
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:image"
+          content="https://quantumsimulator.in/logo.png"
+        />
+      </Helmet>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "QSim — Quantum Circuit Builder",
+            applicationCategory: "EducationalApplication",
+            operatingSystem: "Web",
+            url: "https://quantumsimulator.in/circuit-builder",
+            image: "https://quantumsimulator.in/logo.png",
+            description:
+              "Build quantum circuits with gates like Hadamard, CNOT, RX/RY/RZ, Toffoli, Oracle, and Diffusion. Run simulations, export results, and share your designs.",
+          }),
+        }}
+      />
 
-      <div
-        role="note"
-        aria-label="Performance disclaimer"
-        className="p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200"
-      >
-        Warning: Quantum simulation scales exponentially with qubits (2^n
-        states). Large qubit counts, deep circuits, or wide operations (e.g.,
-        Oracle/Diffusion) can be slow and may temporarily hang your browser tab.
-        Consider saving/exporting your circuit first.
-      </div>
+      <div className="max-w-7xl mx-auto p-8 bg-card rounded-lg shadow-lg mt-10 space-y-8 border">
+        <h1 className="text-4xl font-extrabold text-center mb-8 text-foreground">
+          Quantum Circuit Builder{" "}
+          <span className="text-primary">(Experimental)</span>
+        </h1>
 
-      <div
-        className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground min-w-0"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <span className="px-2 py-1 rounded bg-muted border">
-          Qubits: {numQubits}
-        </span>
-        <span className="px-2 py-1 rounded bg-muted border">
-          Gates: {gateHistory.length}
-        </span>
-        <span
-          className="px-2 py-1 rounded bg-muted border font-mono max-w-[min(60vw,360px)] overflow-hidden text-ellipsis whitespace-nowrap"
-          title={`Initial = |${binaryInitial}⟩ (${initialBasisState})`}
-        >
-          Initial: |{formatKet(binaryInitial, 24)}⟩ ({initialBasisState})
-        </span>
-        {results ? (
-          <span className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-400/30 text-emerald-700 dark:text-emerald-300">
-            Results ready
-          </span>
-        ) : (
-          <span className="px-2 py-1 rounded bg-amber-500/10 border border-amber-400/30 text-amber-800 dark:text-amber-300">
-            Awaiting run
-          </span>
-        )}
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-5 lg:grid-cols-6 mb-2 min-w-0">
-        <div className="min-w-0">
-          <label
-            className="block font-bold text-xl mb-2 text-foreground"
-            htmlFor="qubit-count"
-          >
-            Number of Qubits:
-          </label>
-          <input
-            id="qubit-count"
-            type="number"
-            min={1}
-            className="border border-input rounded-lg p-3 w-full text-lg shadow-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
-            value={inputValue}
-            onChange={(e) => {
-              const value = e.target.value;
-              setInputValue(value);
-              const n = parseInt(value, 10);
-              if (!Number.isFinite(n) || n < 1) {
-                setErrorMessage(
-                  "Enter a positive integer for number of qubits."
-                );
-                return;
-              }
-              if (n === numQubits) return;
-              const newInit = Math.min(initialBasisState, (1 << n) - 1);
-              const filteredOps = gateHistory.filter((op) =>
-                op.qubits.every((q) => q >= 0 && q < n)
-              );
-              if (filteredOps.length !== gateHistory.length) {
-                setErrorMessage(
-                  "Some gates were removed because they referenced out-of-range qubits."
-                );
-              } else {
-                setErrorMessage("");
-              }
-              rebuildFromHistory(n, newInit, filteredOps);
-            }}
-          />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {quickSelect("H", "Hadamard", "Hadamard")}
-            {quickSelect("X", "PauliX", "Pauli-X")}
-            {quickSelect("Y", "PauliY", "Pauli-Y")}
-            {quickSelect("Z", "PauliZ", "Pauli-Z")}
-            {quickSelect("RX", "RX", "RX(θ)")}
-            {quickSelect("RY", "RY", "RY(θ)")}
-            {quickSelect("RZ", "RZ", "RZ(θ)")}
-            {quickSelect("CNOT", "CNOT", "CNOT")}
-            {quickSelect("Swap", "Swap", "Swap")}
-            {quickSelect("Toffoli", "Toffoli", "Toffoli")}
-            {quickSelect(
-              "CP",
-              "ControlledPhaseShift",
-              "Controlled Phase Shift (θ)"
-            )}
-            {quickSelect("Oracle", "Oracle", "Oracle (marked state)")}
-            {quickSelect("Diffusion", "Diffusion", "Diffusion")}
-          </div>
-        </div>
-
-        <div className="md:col-span-4 lg:col-span-5 space-y-4 min-w-0">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-end">
-            <div className="min-w-0">
-              <label
-                className="block text-sm font-medium mb-1 text-muted-foreground"
-                htmlFor="qubits-input"
-              >
-                Qubits to target (comma-separated)
-              </label>
-              <input
-                id="qubits-input"
-                type="text"
-                placeholder="e.g., 0 or 0,1"
-                className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                value={qubitsInput}
-                onChange={(e) => setQubitsInput(e.target.value)}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Gate: {selectedGate || "(none)"}
-              </p>
-            </div>
-
-            <div className="min-w-0">
-              <label
-                className="block text-sm font-medium mb-1 text-muted-foreground"
-                htmlFor="angle-input"
-              >
-                Angle θ (rad)
-              </label>
-              <input
-                id="angle-input"
-                type="number"
-                step={0.01}
-                className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                value={angle}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setAngle(Number.isFinite(v) ? v : 0);
-                }}
-                disabled={
-                  !["RX", "RY", "RZ", "ControlledPhaseShift"].includes(
-                    selectedGate
-                  )
-                }
-                aria-disabled={
-                  !["RX", "RY", "RZ", "ControlledPhaseShift"].includes(
-                    selectedGate
-                  )
-                }
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Used for RX, RY, RZ, and Controlled Phase Shift.
-              </p>
-            </div>
-
-            <div className="min-w-0">
-              <label
-                className="block text-sm font-medium mb-1 text-muted-foreground"
-                htmlFor="oracle-target"
-              >
-                Oracle marked state (int)
-              </label>
-              <input
-                id="oracle-target"
-                type="number"
-                min={0}
-                className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                value={oracleTargetState}
-                onChange={(e) => {
-                  const width = Math.max(1, parseQubits().length || 1);
-                  const max = (1 << width) - 1;
-                  let v = parseInt(e.target.value, 10);
-                  if (!Number.isFinite(v)) v = 0;
-                  v = Math.max(0, Math.min(max, v));
-                  setOracleTargetState(v);
-                }}
-                disabled={selectedGate !== "Oracle"}
-                aria-disabled={selectedGate !== "Oracle"}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">
-                Width inferred from selected qubits. Value clamped to [0, 2^w -
-                1].
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={useCondition}
-                onChange={(e) => setUseCondition(e.target.checked)}
-              />
-              Conditional (measure qubit equals value)
-            </label>
-            <label className="text-sm text-muted-foreground">
-              Qubit
-              <input
-                type="number"
-                className="ml-2 border rounded px-2 py-1 w-20 bg-background text-foreground"
-                min={0}
-                max={Math.max(0, numQubits - 1)}
-                value={conditionQubit}
-                onChange={(e) => {
-                  let v = parseInt(e.target.value, 10);
-                  if (!Number.isFinite(v)) v = 0;
-                  v = Math.max(0, Math.min(numQubits - 1, v));
-                  setConditionQubit(v);
-                }}
-                disabled={!useCondition}
-              />
-            </label>
-            <label className="text-sm text-muted-foreground">
-              Value
-              <select
-                className="ml-2 border rounded px-2 py-1 bg-background text-foreground"
-                value={conditionValue}
-                onChange={(e) =>
-                  setConditionValue(
-                    (parseInt(e.target.value, 10) || 0) as 0 | 1
-                  )
-                }
-                disabled={!useCondition}
-              >
-                <option value={0}>0</option>
-                <option value={1}>1</option>
-              </select>
-            </label>
-
-            <Button
-              className="ml-auto"
-              onClick={handleAddGate}
-              disabled={!canAddGate}
-              aria-disabled={!canAddGate}
-              title={
-                canAddGate
-                  ? "Add gate to circuit"
-                  : "Select gate and valid qubits first"
-              }
-            >
-              Add Gate
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <section aria-labelledby="initial-state-title" className="space-y-3">
-        <h2
-          id="initial-state-title"
-          className="text-lg font-semibold text-foreground"
-        >
-          Initial basis state
-        </h2>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div>
-            <label
-              className="block text-sm font-medium mb-1 text-muted-foreground"
-              htmlFor="initial-state-int"
-            >
-              Integer value
-            </label>
-            <input
-              id="initial-state-int"
-              type="number"
-              min={0}
-              max={(1 << numQubits) - 1}
-              className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              value={initialBasisState}
-              onChange={(e) => {
-                let v = parseInt(e.target.value, 10);
-                if (!Number.isFinite(v)) v = 0;
-                v = Math.max(0, Math.min((1 << numQubits) - 1, v));
-                rebuildFromHistory(numQubits, v, gateHistory);
-              }}
-            />
-            <p className="mt-1 text-xs text-muted-foreground font-mono">
-              |{formatKet(binaryInitial, 48)}⟩ ({initialBasisState})
-            </p>
-          </div>
-          <div className="md:col-span-2 min-w-0">
-            <label className="block text-sm font-medium mb-1 text-muted-foreground">
-              Per-qubit bit toggles
-            </label>
-            <div
-              className="flex flex-row items-center gap-2 overflow-x-auto p-2 border rounded bg-muted/30"
-              role="group"
-              aria-label="Toggle individual qubit bits"
-            >
-              {Array.from({ length: numQubits }).map((_, i) => {
-                const bit = (initialBasisState >> i) & 1;
-                return (
-                  <button
-                    key={`bit-${i}`}
-                    type="button"
-                    className={`px-2 py-1 text-xs rounded border min-w-[56px] ${
-                      bit ? "bg-primary/20 border-primary/40" : "bg-background"
-                    }`}
-                    onClick={() =>
-                      rebuildFromHistory(
-                        numQubits,
-                        initialBasisState ^ (1 << i),
-                        gateHistory
-                      )
-                    }
-                    title={`Toggle q${i} bit`}
-                  >
-                    q{i}: {bit}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="presets-title" className="space-y-2">
-        <h2
-          id="presets-title"
-          className="text-lg font-semibold text-foreground"
-        >
-          Presets
-        </h2>
-        <div className="flex flex-wrap gap-2">
-          <button
-            className="px-3 py-1 rounded border bg-muted hover:bg-muted/70"
-            onClick={() => applyPreset("Bell")}
-          >
-            Bell (2)
-          </button>
-          <button
-            className="px-3 py-1 rounded border bg-muted hover:bg-muted/70"
-            onClick={() => applyPreset("GHZ_3")}
-          >
-            GHZ (3)
-          </button>
-          <button
-            className="px-3 py-1 rounded border bg-muted hover:bg-muted/70"
-            onClick={() => applyPreset("All-H")}
-          >
-            All-H
-          </button>
-          <button
-            className="px-3 py-1 rounded border bg-muted hover:bg-muted/70"
-            onClick={() => applyPreset("Grover_2")}
-          >
-            Grover (2)
-          </button>
-        </div>
-      </section>
-
-      <section aria-labelledby="diagram-title" className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2 justify-between">
-          <h2
-            id="diagram-title"
-            className="text-lg font-semibold text-foreground"
-          >
-            Circuit diagram
-          </h2>
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              className="px-2 py-1 rounded border bg-muted hover:bg-muted/70"
-              onClick={() => setPage(0)}
-              disabled={page === 0}
-            >
-              « First
-            </button>
-            <button
-              className="px-2 py-1 rounded border bg-muted hover:bg-muted/70"
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
-            >
-              ‹ Prev
-            </button>
-            <span className="px-2">
-              Page {page + 1} of {totalPages}
-            </span>
-            <button
-              className="px-2 py-1 rounded border bg-muted hover:bg-muted/70"
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-            >
-              Next ›
-            </button>
-            <button
-              className="px-2 py-1 rounded border bg-muted hover:bg-muted/70"
-              onClick={() => setPage(totalPages - 1)}
-              disabled={page >= totalPages - 1}
-            >
-              Last »
-            </button>
-            <label className="ml-2 text-xs text-muted-foreground">Cols</label>
-            <select
-              className="border rounded px-2 py-1 bg-background text-foreground"
-              value={pageSize}
-              onChange={(e) => {
-                const s = Math.max(4, parseInt(e.target.value, 10) || 16);
-                setPageSize(s);
-                setPage(0);
-              }}
-            >
-              {[8, 16, 24, 32, 40].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="w-full p-3 bg-card rounded border shadow-sm">
-          {renderCircuitDiagram()}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="destructive"
-            onClick={handleRemoveLastGate}
-            disabled={!canRemoveLast}
-            aria-disabled={!canRemoveLast}
-            title="Remove last gate"
-          >
-            Remove last gate
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleResetCircuit}
-            disabled={!canResetCircuit}
-            aria-disabled={!canResetCircuit}
-            title="Reset circuit"
-          >
-            Reset circuit
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportPNG}
-            title="Export circuit diagram as PNG"
-          >
-            Export PNG
-          </Button>
-        </div>
-      </section>
-
-      <section className="space-y-2" aria-label="Persistence actions">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="success"
-            onClick={handleSaveCircuit}
-            title="Save circuit to browser storage"
-          >
-            Save
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={handleLoadCircuit}
-            title="Load circuit from browser storage"
-          >
-            Load
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportCircuit}
-            title="Export circuit JSON"
-          >
-            Export JSON
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleImportClick}
-            title="Import circuit JSON"
-          >
-            Import JSON
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            className="hidden"
-            onChange={handleImportCircuit}
-          />
-          <Button
-            variant="secondary"
-            onClick={handleShare}
-            title="Copy shareable URL"
-          >
-            Share URL
-          </Button>
-        </div>
-      </section>
-
-      {errorMessage && (
         <div
+          role="note"
+          aria-label="Performance disclaimer"
+          className="p-3 rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200"
+        >
+          Warning: Quantum simulation scales exponentially with qubits (2^n
+          states). Large qubit counts, deep circuits, or wide operations (e.g.,
+          Oracle/Diffusion) can be slow and may temporarily hang your browser
+          tab. Consider saving/exporting your circuit first.
+        </div>
+
+        <div
+          className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground min-w-0"
           role="status"
           aria-live="polite"
-          className="p-3 rounded border bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+          aria-atomic="true"
         >
-          {errorMessage}
+          <span className="px-2 py-1 rounded bg-muted border">
+            Qubits: {numQubits}
+          </span>
+          <span className="px-2 py-1 rounded bg-muted border">
+            Gates: {gateHistory.length}
+          </span>
+          <span
+            className="px-2 py-1 rounded bg-muted border font-mono max-w-[min(60vw,360px)] overflow-hidden text-ellipsis whitespace-nowrap"
+            title={`Initial = |${binaryInitial}⟩ (${initialBasisState})`}
+          >
+            Initial: |{formatKet(binaryInitial, 24)}⟩ ({initialBasisState})
+          </span>
+          {results ? (
+            <span className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-400/30 text-emerald-700 dark:text-emerald-300">
+              Results ready
+            </span>
+          ) : (
+            <span className="px-2 py-1 rounded bg-amber-500/10 border border-amber-400/30 text-amber-800 dark:text-amber-300">
+              Awaiting run
+            </span>
+          )}
         </div>
-      )}
 
-      <section aria-labelledby="run-title" className="space-y-3">
-        <div className="flex items-end gap-3 flex-wrap">
-          <h2 id="run-title" className="text-lg font-semibold text-foreground">
-            Run simulation
-          </h2>
-          <label className="text-sm text-muted-foreground">
-            Shots
+        <div className="grid gap-6 md:grid-cols-5 lg:grid-cols-6 mb-2 min-w-0">
+          <div className="min-w-0">
+            <label
+              className="block font-bold text-xl mb-2 text-foreground"
+              htmlFor="qubit-count"
+            >
+              Number of Qubits:
+            </label>
             <input
+              id="qubit-count"
               type="number"
               min={1}
-              className="ml-2 border rounded px-2 py-1 w-24 bg-background text-foreground"
-              value={numShots}
+              className="border border-input rounded-lg p-3 w-full text-lg shadow-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+              value={inputValue}
               onChange={(e) => {
-                let v = parseInt(e.target.value, 10);
-                if (!Number.isFinite(v)) v = 1;
-                v = Math.max(1, v);
-                setNumShots(v);
+                const value = e.target.value;
+                setInputValue(value);
+                const n = parseInt(value, 10);
+                if (!Number.isFinite(n) || n < 1) {
+                  setErrorMessage(
+                    "Enter a positive integer for number of qubits."
+                  );
+                  return;
+                }
+                if (n === numQubits) return;
+                const newInit = Math.min(initialBasisState, (1 << n) - 1);
+                const filteredOps = gateHistory.filter((op) =>
+                  op.qubits.every((q) => q >= 0 && q < n)
+                );
+                if (filteredOps.length !== gateHistory.length) {
+                  setErrorMessage(
+                    "Some gates were removed because they referenced out-of-range qubits."
+                  );
+                } else {
+                  setErrorMessage("");
+                }
+                rebuildFromHistory(n, newInit, filteredOps);
               }}
             />
-          </label>
-          <Button onClick={handleRunCircuit} title="Run the circuit">
-            Run
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleExportCSV}
-            disabled={!amplitudes}
-            aria-disabled={!amplitudes}
-            title="Export amplitudes CSV (run first)"
-          >
-            Export CSV
-          </Button>
+            <GatePalette
+              selectedGate={selectedGate}
+              setSelectedGate={setSelectedGate}
+              parseQubits={parseQubits}
+            />
+          </div>
+
+          <div className="md:col-span-4 lg:col-span-5 space-y-4 min-w-0">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 items-end">
+              <div className="min-w-0">
+                <label
+                  className="block text-sm font-medium mb-1 text-muted-foreground"
+                  htmlFor="qubits-input"
+                >
+                  Qubits to target (comma-separated)
+                </label>
+                <input
+                  id="qubits-input"
+                  type="text"
+                  placeholder="e.g., 0 or 0,1"
+                  className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={qubitsInput}
+                  onChange={(e) => setQubitsInput(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Gate: {selectedGate || "(none)"}
+                </p>
+              </div>
+
+              <div className="min-w-0">
+                <label
+                  className="block text-sm font-medium mb-1 text-muted-foreground"
+                  htmlFor="angle-input"
+                >
+                  Angle θ (rad)
+                </label>
+                <input
+                  id="angle-input"
+                  type="number"
+                  step={0.01}
+                  className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={angle}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setAngle(Number.isFinite(v) ? v : 0);
+                  }}
+                  disabled={
+                    !["RX", "RY", "RZ", "ControlledPhaseShift"].includes(
+                      selectedGate
+                    )
+                  }
+                  aria-disabled={
+                    !["RX", "RY", "RZ", "ControlledPhaseShift"].includes(
+                      selectedGate
+                    )
+                  }
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Used for RX, RY, RZ, and Controlled Phase Shift.
+                </p>
+              </div>
+
+              <div className="min-w-0">
+                <label
+                  className="block text-sm font-medium mb-1 text-muted-foreground"
+                  htmlFor="oracle-target"
+                >
+                  Oracle marked state (int)
+                </label>
+                <input
+                  id="oracle-target"
+                  type="number"
+                  min={0}
+                  className="border border-input rounded-lg p-2 w-full text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={oracleTargetState}
+                  onChange={(e) => {
+                    const width = Math.max(1, parseQubits().length || 1);
+                    const max = (1 << width) - 1;
+                    let v = parseInt(e.target.value, 10);
+                    if (!Number.isFinite(v)) v = 0;
+                    v = Math.max(0, Math.min(max, v));
+                    setOracleTargetState(v);
+                  }}
+                  disabled={selectedGate !== "Oracle"}
+                  aria-disabled={selectedGate !== "Oracle"}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Width inferred from selected qubits. Value clamped to [0, 2^w
+                  - 1].
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  type="checkbox"
+                  checked={useCondition}
+                  onChange={(e) => setUseCondition(e.target.checked)}
+                />
+                Conditional (measure qubit equals value)
+              </label>
+              <label className="text-sm text-muted-foreground">
+                Qubit
+                <input
+                  type="number"
+                  className="ml-2 border rounded px-2 py-1 w-20 bg-background text-foreground"
+                  min={0}
+                  max={Math.max(0, numQubits - 1)}
+                  value={conditionQubit}
+                  onChange={(e) => {
+                    let v = parseInt(e.target.value, 10);
+                    if (!Number.isFinite(v)) v = 0;
+                    v = Math.max(0, Math.min(numQubits - 1, v));
+                    setConditionQubit(v);
+                  }}
+                  disabled={!useCondition}
+                />
+              </label>
+              <label className="text-sm text-muted-foreground">
+                Value
+                <select
+                  className="ml-2 border rounded px-2 py-1 bg-background text-foreground"
+                  value={conditionValue}
+                  onChange={(e) =>
+                    setConditionValue(
+                      (parseInt(e.target.value, 10) || 0) as 0 | 1
+                    )
+                  }
+                  disabled={!useCondition}
+                >
+                  <option value={0}>0</option>
+                  <option value={1}>1</option>
+                </select>
+              </label>
+
+              <Button
+                className="ml-auto"
+                onClick={handleAddGate}
+                disabled={!canAddGate}
+                aria-disabled={!canAddGate}
+                title={
+                  canAddGate
+                    ? "Add gate to circuit"
+                    : "Select gate and valid qubits first"
+                }
+              >
+                Add Gate
+              </Button>
+            </div>
+          </div>
         </div>
 
-        {results && (
-          <QuantumStateVisualizer
-            numQubits={numQubits}
-            results={results}
-            counts={counts}
-            qubitStates={qubitStates}
-          />
+        <InitialStateControls
+          numQubits={numQubits}
+          initialBasisState={initialBasisState}
+          binaryInitial={binaryInitial}
+          formatKet={formatKet}
+          onChangeInitial={(v) => rebuildFromHistory(numQubits, v, gateHistory)}
+          onToggleBit={(i) =>
+            rebuildFromHistory(
+              numQubits,
+              initialBasisState ^ (1 << i),
+              gateHistory
+            )
+          }
+        />
+
+        <Presets onApply={applyPreset} />
+
+        <DiagramPanel
+          numQubits={numQubits}
+          visibleHistory={visibleHistory}
+          colStart={colStart}
+          hoveredCol={hoveredCol}
+          setHoveredCol={setHoveredCol}
+          onRemoveAt={handleRemoveGateAt}
+          page={page}
+          setPage={setPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          setPageSize={setPageSize}
+          canRemoveLast={canRemoveLast}
+          canReset={canResetCircuit}
+          onRemoveLast={handleRemoveLastGate}
+          onReset={handleResetCircuit}
+          onExportPNG={handleExportPNG}
+          circuitDiagramRef={circuitDiagramRef}
+        />
+
+        <PersistencePanel
+          onSave={handleSaveCircuit}
+          onLoad={handleLoadCircuit}
+          onExportJSON={handleExportCircuit}
+          onImportJSON={handleImportClick}
+          onShare={handleShare}
+          fileInputRef={fileInputRef}
+          onFileChange={handleImportCircuit}
+        />
+
+        {errorMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="p-3 rounded border bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200"
+          >
+            {errorMessage}
+          </div>
         )}
-      </section>
-    </div>
+
+        <RunPanel
+          numQubits={numQubits}
+          results={results}
+          counts={counts}
+          qubitStates={qubitStates}
+          numShots={numShots}
+          setNumShots={setNumShots}
+          onRun={handleRunCircuit}
+          canExportCSV={Boolean(amplitudes)}
+          onExportCSV={handleExportCSV}
+        />
+      </div>
+    </>
   );
 };
 

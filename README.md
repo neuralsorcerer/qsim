@@ -10,13 +10,24 @@ QSim is a web application to design, simulate, and visualize quantum circuits. B
 
 - Circuit Builder UI with gate palette
   - Supported gates: Hadamard, PauliX, PauliY, PauliZ, RX, RY, RZ, CNOT, Swap, Toffoli, ControlledPhaseShift, Oracle, Diffusion
-  - Visual circuit grid with per-qubit timeline
+  - Visual circuit grid with per-qubit timeline, pagination, status bar, and accessible controls
+  - Robust gate validation with clear error messages (arity, ranges, distinct multi‑qubit targets, conditional overlap checks)
+  - Conditional gates (measure a qubit and apply only if outcome matches)
 - Simulation
   - Probabilities and measurement counts via configurable shots
-  - Per-qubit Bloch sphere parameters
+  - Per-qubit Bloch sphere parameters (computed from reduced single‑qubit expectations)
+  - Sparse-state engine with defensive arity assertions and range checks
+  - Optional per‑step normalization for robustness (configurable)
 - Persistence and portability
   - Save/Load from browser storage
   - Import/Export circuits as JSON
+  - Export circuit diagram as PNG
+  - Export amplitudes as CSV
+  - Shareable URL generation
+- Performance safeguards and UX
+  - Prominent disclaimer about exponential state growth
+  - Soft‑limit confirmation before very large runs (state size >= 2^18 or depth > 128)
+  - Consistent button styles, color‑coded gate palette, keyboard/ARIA improvements
 
 ## Getting Started
 
@@ -77,13 +88,27 @@ npm run preview
 
 This serves the contents of `dist/` locally for verification.
 
+## Performance and limits
+
+- Simulation memory/time grows as O(2^n). Very large n or deep circuits can hang a tab.
+- Before running very large configurations, the app asks for confirmation (state size ≥ 2^18 or depth > 128).
+- Wide global operators (Oracle/Diffusion) impact performance more than local 1–2 qubit gates.
+
 ## Environment Variables
 
 - Optional:
   - `VITE_DEBUG`: set to `true` to enable additional debug logging in the app.
+  - `VITE_NORMALIZE_EACH_STEP`: set to `false` to skip normalization after each gate for performance. Defaults to `true` for robustness. Measurements always renormalize.
 
 Create a `.env` or `.env.local` file at the project root, for example:
 
 ```bash
 VITE_DEBUG=true
+VITE_NORMALIZE_EACH_STEP=true
 ```
+
+## Notes on correctness and safety
+
+- Defensive arity assertions: a k‑qubit gate must target exactly k qubits (derived from matrix size 2^k).
+- Multi‑qubit gates require distinct target qubits; conditional qubit cannot overlap targets.
+- Input ranges are validated (qubit indices and initial basis state).

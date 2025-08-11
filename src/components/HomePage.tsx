@@ -15,6 +15,7 @@ import { cn } from "../lib/utils";
 import { motion } from "framer-motion";
 import { HowItWorks } from "./HowItWorks";
 import { useEffect, useState } from "react";
+import { Helmet } from "react-helmet-async";
 
 export function HomePage() {
   const [isDark, setIsDark] = useState<boolean>(() =>
@@ -33,6 +34,47 @@ export function HomePage() {
 
   return (
     <>
+      <Helmet>
+        <title>QSim — Quantum Circuit Simulator</title>
+        <meta
+          name="description"
+          content="Design, simulate, and visualize quantum circuits in your browser. Learn superposition, entanglement, Grover's algorithm, and more using QSim."
+        />
+        <link rel="canonical" href="https://quantumsimulator.in/" />
+        <meta property="og:title" content="QSim — Quantum Circuit Simulator" />
+        <meta
+          property="og:description"
+          content="Design, simulate, and visualize quantum circuits in your browser."
+        />
+        <meta
+          property="og:image"
+          content="https://quantumsimulator.in/logo.png"
+        />
+        <meta property="og:url" content="https://quantumsimulator.in/" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta
+          name="twitter:image"
+          content="https://quantumsimulator.in/logo.png"
+        />
+      </Helmet>
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "QSim",
+            url: "https://quantumsimulator.in/",
+            logo: "https://quantumsimulator.in/logo.png",
+            sameAs: [
+              "https://github.com/neuralsorcerer",
+              "https://x.com/neuralsorcerer",
+            ],
+          }),
+        }}
+      />
+
       <section className="relative flex items-center justify-center">
         <div className="relative items-center w-full py-12 lg:py-20">
           <motion.div
