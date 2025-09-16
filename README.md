@@ -1,4 +1,14 @@
-# QSim - Quantum Simulator
+<h1 align="center">
+QSim - Quantum Simulator
+</h1>
+
+<div align="center">
+
+[![Vite](https://img.shields.io/badge/Vite+React+TypeScript-purple?logo=vite&logoColor=white)](https://vite.dev/)
+[![Vercel Deploy](https://deploy-badge.vercel.app/vercel/reactions-demo?name=Production)](https://quantumsimulator.in/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-3c60b1.svg?logo=opensourceinitiative&logoColor=white)](./LICENSE)
+
+</div>
 
 ![Homepage](.github/screenshots/homepage.png)
 
@@ -108,3 +118,7 @@ VITE_NORMALIZE_EACH_STEP=true
 - Defensive arity assertions: a k‑qubit gate must target exactly k qubits (derived from matrix size 2^k).
 - Multi‑qubit gates require distinct target qubits; conditional qubit cannot overlap targets.
 - Input ranges are validated (qubit indices and initial basis state).
+
+## License
+
+This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
