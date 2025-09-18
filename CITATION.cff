@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: Sarkar
+  given-names: Soumyadip
+  orcid: https://orcid.org/0000-0002-2377-9147
+title: "QSim - Quantum Simulator"
+date-released: 2025-08-11
+url: "https://doi.org/10.5281/zenodo.17154174"

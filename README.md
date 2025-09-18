@@ -7,6 +7,7 @@ QSim - Quantum Simulator
 [![Vite](https://img.shields.io/badge/Vite+React+TypeScript-purple?logo=vite&logoColor=white)](https://vite.dev/)
 [![Vercel Deploy](https://deploy-badge.vercel.app/vercel/reactions-demo?name=Production)](https://quantumsimulator.in/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-3c60b1.svg?logo=opensourceinitiative&logoColor=white)](./LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17154174.svg)](https://doi.org/10.5281/zenodo.17154174)
 
 </div>
 
