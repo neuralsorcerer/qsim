@@ -120,6 +120,20 @@ VITE_NORMALIZE_EACH_STEP=true
 - Multi‑qubit gates require distinct target qubits; conditional qubit cannot overlap targets.
 - Input ranges are validated (qubit indices and initial basis state).
 
+## Citation
+
+If you use this in your work and wish to refer to it, please use the following BibTeX entry.
+```bibtex
+@software{sarkar_2025_17154174,
+  author       = {Sarkar, Soumyadip},
+  title        = {QSim - Quantum Simulator},
+  year         = 2025,
+  publisher    = {GitHub},
+  doi          = {10.5281/zenodo.17154174},
+  url          = {https://doi.org/10.5281/zenodo.17154174},
+}
+```
+
 ## License
 
 This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
